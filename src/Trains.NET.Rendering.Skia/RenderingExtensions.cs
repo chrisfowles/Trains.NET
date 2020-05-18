@@ -5,19 +5,7 @@ namespace Trains.NET.Rendering.Skia
 {
     public static class RenderingExtensions
     {
-        public static SKColor ToSkia(this Colors color) => color switch
-        {
-            Colors.Cyan => SKColors.Cyan,
-            Colors.Green => SKColors.Green,
-            Colors.Magenta => SKColors.Magenta,
-            Colors.Purple => SKColors.Purple,
-            Colors.LightGray => SKColors.LightGray,
-            Colors.Black => SKColors.Black,
-            Colors.White => SKColors.White,
-            Colors.Red => SKColors.Red,
-            Colors.Blue => SKColors.Blue,
-            _ => throw new NotImplementedException()
-        };
+        public static SKColor ToSkia(this Color color) => SKColor.Parse(color.HexCode);
 
         public static SKClipOperation ToSkia(this ClipOperation operation) => operation switch
         {
@@ -58,7 +46,7 @@ namespace Trains.NET.Rendering.Skia
 
             if (brush.Color != null)
             {
-                paint.Color = brush.Color.Value.ToSkia();
+                paint.Color = brush.Color.ToSkia();
             }
             if (brush.IsAntialias != null)
             {

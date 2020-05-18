@@ -1,12 +1,14 @@
 ﻿using Trains.NET.Engine;
 using Xunit;
-
-#nullable disable
+using Xunit.Abstractions;
 
 namespace Trains.NET.Tests
 {
     public class TrackLayoutTests : TestBase
     {
+        public TrackLayoutTests(ITestOutputHelper output) : base(output)
+        { }
+
         [Fact]
         public void FishHook()
         {

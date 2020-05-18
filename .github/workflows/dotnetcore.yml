@@ -21,8 +21,47 @@ jobs:
       with:
         dotnet-version: 3.1.100
 
-    - name: Build with dotnet
-      run: dotnet build --configuration Release
+    - name: setup-msbuild
+      uses: microsoft/setup-msbuild@v1
+
+    - name: Build with msbuild
+      run: msbuild Trains.NET.sln /m /restore /p:Configuration=Release
 
     - name: Run tests
       run: dotnet test
+    
+    - name: GitVersion
+      id: nbgv
+      uses: aarnott/nbgv@master
+      with:
+        setAllVars: true
+    
+    - run: |
+        echo 'SemVer2: ${{ steps.nbgv.outputs.SemVer2 }}'
+
+    - name: Zip release
+      run: Get-ChildItem -File -Path .\src\Trains.NET.WPF\bin\Release\net472\* | Compress-Archive -DestinationPath trains.net.v${{ steps.nbgv.outputs.SemVer2 }}.zip   
+      shell: powershell
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.nbgv.outputs.SemVer2 }}
+        release_name: Trains.NET v${{ steps.nbgv.outputs.SemVer2 }}
+        body: Trains.NET v${{ steps.nbgv.outputs.SemVer2 }}
+        draft: false
+        prerelease: true
+        
+    - name: Upload Release Asset
+      id: upload-release-asset 
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./trains.net.v${{ steps.nbgv.outputs.SemVer2 }}.zip  
+        asset_name: trains.net.v${{ steps.nbgv.outputs.SemVer2 }}.zip  
+        asset_content_type: application/zip

@@ -23,9 +23,6 @@ namespace Trains.NET.WPF
 
             InitializeComponent();
 
-#if DEBUG
-            global::Comet.Reload.Init();
-#endif
             global::Comet.WPF.UI.Init();
             global::Comet.Skia.UI.Init();
 
@@ -33,7 +30,10 @@ namespace Trains.NET.WPF
             Registrar.Handlers.Register<ToggleButton, ToggleButtonHandler>();
 
             MainFrame.NavigationUIVisibility = System.Windows.Navigation.NavigationUIVisibility.Hidden;
-            MainFrame.NavigationService.Navigate(new CometPage(MainFrame, serviceProvider.GetService<MainPage>()));
+            var page = new CometPage(MainFrame, serviceProvider.GetService<MainPage>());
+            MainFrame.Content = page;
+
+            this.Title = page.View.GetTitle();
         }
 
         private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
@@ -76,6 +76,7 @@ namespace Trains.NET.WPF
                 yield return typeof(Trains.NET.Rendering.IGame).Assembly;
                 yield return typeof(Trains.NET.Rendering.Skia.SKCanvasWrapper).Assembly;
                 yield return typeof(MainWindow).Assembly;
+                yield return typeof(MainPage).Assembly;
             }
         }
     }

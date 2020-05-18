@@ -4,14 +4,21 @@
     <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Clancey.Comet" />
-    <PackageReference Include="Clancey.Comet.Skia" />
+   <ItemGroup>
+    <ProjectReference Include="..\..\comet\src\Comet.Skia.WPF\Comet.Skia.WPF.csproj" />
+    <ProjectReference Include="..\..\comet\src\Comet.Skia\Comet.Skia.csproj" />
+    <ProjectReference Include="..\..\comet\src\Comet.WPF\Comet.WPF.csproj" />
+    <ProjectReference Include="..\..\comet\src\Comet\Comet.csproj" />
   </ItemGroup>
   
   <ItemGroup>
     <ProjectReference Include="..\Trains.NET.Rendering.Skia\Trains.NET.Rendering.Skia.csproj" />
     <ProjectReference Include="..\Trains.NET.Rendering\Trains.NET.Rendering.csproj" />
+  </ItemGroup>
+
+  <!-- Because Comet is a project reference -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.Threading" Version="16.4.43" />
   </ItemGroup>
   
 </Project>

@@ -12,10 +12,13 @@ namespace Trains.NET.Engine
         Track? GetTrackAt(int column, int row);
         System.Collections.Generic.IEnumerable<(int, int, Track)> GetTracks();
         void ClearAll();
-        void AddTrain(int column, int row);
+        IMovable? AddTrain(int column, int row);
         IEnumerable<IMovable> GetMovables();
+        void RemoveMovable(IMovable thing);
         IEnumerable<T> GetMovables<T>() where T : IMovable;
+        IMovable? GetMovableAt(int column, int row);
         Track? GetTrackForTrain(Train train);
         void LoadTracks(IEnumerable<Track> tracks);
+        List<TrainPosition> GetNextSteps(Train train, float distanceToMove);
     }
 }

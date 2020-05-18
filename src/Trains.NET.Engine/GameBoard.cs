@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Trains.NET.Instrumentation;
 
 namespace Trains.NET.Engine
 {
     internal class GameBoard : IGameBoard, IDisposable
     {
+        private readonly ElapsedMillisecondsTimedStat _gameUpdateTime = InstrumentationBag.Add<ElapsedMillisecondsTimedStat>("GameLoopStepTime");
+
         private const int GameLoopInterval = 16;
 
         private readonly Dictionary<(int, int), Track> _tracks = new Dictionary<(int, int), Track>();
@@ -15,7 +18,6 @@ namespace Trains.NET.Engine
 
         public int Columns { get; set; }
         public int Rows { get; set; }
-        public int SpeedAdjustmentFactor { get; set; } = 10;
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "<Pending>")]
         public GameBoard(IGameStorage? storage, ITimer? timer)
@@ -24,7 +26,7 @@ namespace Trains.NET.Engine
             if (_gameLoopTimer != null)
             {
                 _gameLoopTimer.Interval = GameLoopInterval;
-                _gameLoopTimer.Elapsed += GameLoopStep;
+                _gameLoopTimer.Elapsed += GameLoopTimerElapsed;
                 _gameLoopTimer.Start();
             }
 
@@ -66,28 +68,154 @@ namespace Trains.NET.Engine
             {
                 track.ReevaluateHappiness();
             }
+
+            _storage?.WriteTracks(_tracks.Values);
         }
 
-        private void GameLoopStep(object sender, EventArgs e)
+        public void GameLoopStep()
         {
-            _gameLoopTimer?.Stop();
-            foreach (Train train in _movables)
+            _gameUpdateTime.Start();
+            try
             {
-                float distance = 0.005f * this.SpeedAdjustmentFactor;
-                while (distance > 0.0f)
+                HashSet<Track> takenTracks = new HashSet<Track>();
+                foreach (Train train in _movables)
                 {
-                    Track? track = GetTrackForTrain(train);
-                    if (track != null)
+                    if (train.Speed == 0) continue;
+
+                    Train dummyTrain = train.Clone();
+
+                    if (MoveTrain(dummyTrain, train.LookaheadDistance, takenTracks))
                     {
-                        distance = train.Move(distance, track);
-                    }
-                    else
-                    {
-                        break;
+                        MoveTrain(train, train.DistanceToMove, null);
                     }
                 }
             }
+            catch (Exception)
+            {
+            }
+            _gameUpdateTime.Stop();
+        }
+
+        private bool MoveTrain(Train train, float distanceToMove, HashSet<Track>? takenTracks)
+        {
+            List<Track> newTakenTracks = new List<Track>();
+
+            if (distanceToMove <= 0) return true;
+
+            List<TrainPosition>? steps = GetNextSteps(train, distanceToMove);
+
+            TrainPosition? lastPosition = null;
+
+            foreach (TrainPosition newPosition in steps)
+            {
+                Track? track = GetTrackForTrain(train);
+                if (track == null) return false;
+
+                IMovable? otherTrain = GetMovableAt(newPosition.Column, newPosition.Row);
+                Track? nextTrack = GetTrackAt(newPosition.Column, newPosition.Row);
+
+                if (nextTrack == null)   // No track to move to
+                {
+                    break;
+                }
+
+                if (track != nextTrack && !track.GetNeighbors().Contains(nextTrack)) // next track is not connected
+                {
+                    break;
+                }
+                if (otherTrain != null && otherTrain.UniqueID != train.UniqueID) // There is a train that isn't us
+                {
+                    break;
+                }
+
+                if (takenTracks != null && takenTracks.Contains(nextTrack))
+                {
+                    break;
+                }
+
+                newTakenTracks.Add(nextTrack);
+
+                lastPosition = newPosition;
+
+                train.Column = newPosition.Column;
+                train.Row = newPosition.Row;
+                train.Angle = newPosition.Angle;
+                train.RelativeLeft = newPosition.RelativeLeft;
+                train.RelativeTop = newPosition.RelativeTop;
+            }
+
+            if (takenTracks != null)
+            {
+                takenTracks.UnionWith(newTakenTracks);
+            }
+
+            return lastPosition?.Distance <= 0.0f;
+        }
+
+        public List<TrainPosition> GetNextSteps(Train train, float distanceToMove)
+        {
+            List<TrainPosition> result = new List<TrainPosition>();
+
+            float distance = distanceToMove;
+            while (distance > 0.0f)
+            {
+                TrainPosition position = result.LastOrDefault() ?? train.GetPosition();
+
+                TrainPosition? newPosition = GetNextPosition(position, distance);
+                if (newPosition != null)
+                {
+                    result.Add(newPosition);
+                    distance = newPosition.Distance;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return result;
+        }
+
+        private void GameLoopTimerElapsed(object sender, EventArgs e)
+        {
+            _gameLoopTimer?.Stop();
+            GameLoopStep();
             _gameLoopTimer?.Start();
+        }
+
+        private TrainPosition? GetNextPosition(TrainPosition currentPosition, float distance)
+        {
+            Track? track = GetTrackAt(currentPosition.Column, currentPosition.Row);
+
+            if (track == null) return null;
+
+            TrainPosition position = currentPosition.Clone();
+            position.Distance = distance;
+
+            track.Move(position);
+
+            if (position.RelativeLeft < 0.0f)
+            {
+                position.Column--;
+                position.RelativeLeft = 1.0f;
+            }
+            if (position.RelativeLeft > 1.0f)
+            {
+                position.Column++;
+                position.RelativeLeft = 0.0f;
+            }
+            if (position.RelativeTop < 0.0f)
+            {
+                position.Row--;
+                position.RelativeTop = 1.0f;
+            }
+            if (position.RelativeTop > 1.0f)
+            {
+                position.Row++;
+                position.RelativeTop = 0.0f;
+            }
+
+            return position;
         }
 
         public Track? GetTrackForTrain(Train train)
@@ -131,7 +259,7 @@ namespace Trains.NET.Engine
             _storage?.WriteTracks(_tracks.Values);
         }
 
-        public void AddTrain(int column, int row)
+        public IMovable? AddTrain(int column, int row)
         {
             var train = new Train()
             {
@@ -142,10 +270,17 @@ namespace Trains.NET.Engine
             Track? track = GetTrackForTrain(train);
             if (track == null)
             {
-                return;
+                return null;
             }
 
             _movables.Add(train);
+
+            return train;
+        }
+
+        public void RemoveMovable(IMovable movable)
+        {
+            _movables.Remove(movable);
         }
 
         public IEnumerable<(int, int, Track)> GetTracks()
@@ -193,5 +328,7 @@ namespace Trains.NET.Engine
         {
             _gameLoopTimer?.Dispose();
         }
+
+        public IMovable? GetMovableAt(int column, int row) => _movables.FirstOrDefault(t => t.Column == column && t.Row == row);
     }
 }
